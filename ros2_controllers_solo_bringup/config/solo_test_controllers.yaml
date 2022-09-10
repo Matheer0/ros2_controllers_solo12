@@ -1,0 +1,39 @@
+test_controllers:
+  ros__parameters:
+
+    wait_sec_between_publish: 0.001
+    config_desired: [0.0, 0.8, -1.6, 0.0, 0.8, -1.6, 0.0, -0.8, 1.6, 0.0, -0.8, 1.6]
+    joints:
+      - FL_HAA
+      - FR_HAA
+      - HL_HAA
+      - HR_HAA
+      - FL_KFE
+      - FR_KFE
+      - HL_KFE
+      - HR_KFE
+      - FL_HFE
+      - FR_HFE
+      - HL_HFE
+      - HR_HFE
+
+
+test_controllers_cpp:
+  ros__parameters:
+
+    wait_sec_between_publish: 0.001
+    config_desired: [0.0, 0.8, -1.6, 0.0, 0.8, -1.6, 0.0, -0.8, 1.6, 0.0, -0.8, 1.6]
+
+    joints:
+      - FL_HAA
+      - FR_HAA
+      - HL_HAA
+      - HR_HAA
+      - FL_KFE
+      - FR_KFE
+      - HL_KFE
+      - HR_KFE
+      - FL_HFE
+      - FR_HFE
+      - HL_HFE
+      - HR_HFE
