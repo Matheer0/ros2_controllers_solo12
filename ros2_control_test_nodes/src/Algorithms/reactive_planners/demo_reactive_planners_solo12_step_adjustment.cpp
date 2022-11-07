@@ -1,9 +1,7 @@
 #include "ros2_control_test_nodes/reactive_planners/demo_reactive_planners_solo12_step_adjustment.hpp"
-#include <pinocchio/algorithm/jacobian.hpp>
 #include <pinocchio/algorithm/frames.hpp>
 #include <pinocchio/algorithm/centroidal.hpp>
 #include <pinocchio/algorithm/center-of-mass.hpp>
-#include <pinocchio/algorithm/kinematics.hpp>
 #include <pinocchio/algorithm/crba.hpp>
 #include <pinocchio/math/rpy.hpp>
 #include <cmath>
@@ -36,7 +34,6 @@ DemoReactivePlanner::DemoReactivePlanner(std::string path_to_urdf) {
     kd = Eigen::VectorXd::Zero(12);
     kp << 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0;
     kd << 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0;
-    // kd << 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
     std::vector<std::string> frame_root_names = {"FL_HFE", "FR_HFE", "HL_HFE", "HR_HFE"};
     endeff_names = {"FL_FOOT", "FR_FOOT", "HL_FOOT", "HR_FOOT"};
     imp_ctrls = {mim_control::ImpedanceController(),
@@ -50,15 +47,15 @@ DemoReactivePlanner::DemoReactivePlanner(std::string path_to_urdf) {
     quadruped_dcm_reactive_stepper = reactive_planners::QuadrupedDcmReactiveStepper();
 }
 
-void DemoReactivePlanner::initialize(Eigen::VectorXd &q) {
+void DemoReactivePlanner::initialize(Eigen::Matrix<double, 19, 1> &q) {
     // initialize fields for the quadruped Dcm reactive stepper
     is_left_leg_in_contact = true;
     l_min = -0.1;
     l_max = 0.1;
     w_min = -0.08;
     w_max = 0.2;
-    t_min = 0.1;
-    t_max = 1.0;
+    t_min = 0.12;
+    t_max = 2.0;
     l_p = 0.00;
     com_height = q(2);
     weight = Eigen::VectorXd::Zero(9);
@@ -70,22 +67,21 @@ void DemoReactivePlanner::initialize(Eigen::VectorXd &q) {
     pinocchio::framesForwardKinematics(model, data, q);
 
     Eigen::VectorXd base_pose = q.head(7);
-    Eigen::Vector3d front_left_foot_position = data.oMf[imp_ctrls[0].get_endframe_index()].translation();
-    Eigen::Vector3d front_right_foot_position = data.oMf[imp_ctrls[1].get_endframe_index()].translation();
-    Eigen::Vector3d hind_left_foot_position = data.oMf[imp_ctrls[2].get_endframe_index()].translation();
-    Eigen::Vector3d hind_right_foot_position = data.oMf[imp_ctrls[3].get_endframe_index()].translation();
+    front_left_foot_position = data.oMf[imp_ctrls[0].get_endframe_index()].translation();
+    front_right_foot_position = data.oMf[imp_ctrls[1].get_endframe_index()].translation();
+    hind_left_foot_position = data.oMf[imp_ctrls[2].get_endframe_index()].translation();
+    hind_right_foot_position = data.oMf[imp_ctrls[3].get_endframe_index()].translation();
 
     v_des = {0.0, 0.0, 0.0};
-    v_des(0) = 0.2; // forward
-    // y_des = 0.2; // turning
-    y_des = 0.0; // forward
+//    v_des(0) = 0.2; // forward
+//    y_des = 0.0; // forward
+    y_des = 0.2; // turning
 
     // centroidal initialization
     data.M.fill(0);
     pinocchio::crba(model, data, q);
-    Eigen::Vector3d inertia = data.M.block<3,3>(3,3).diagonal();
-    std::cout << "Here!" << std::endl;
-    std::cout << "inertia = " << inertia << std::endl;
+    Eigen::Vector3d inertia = data.M.block<3, 3>(3, 3).diagonal();
+//    inertia = {0.04196225, 0.0699186, 0.08607027};
     centrl_pd_ctrl.initialize(2.5, inertia);
 
     // initialize quadruped_dcm_reactive_stepper
@@ -120,39 +116,35 @@ void DemoReactivePlanner::initialize(Eigen::VectorXd &q) {
     dcm_force = {0.0, 0.0, 0.0};
 }
 
-Eigen::VectorXd DemoReactivePlanner::compute_torques(Eigen::VectorXd &q, Eigen::VectorXd &dq, float control_time) {
-
-    q << 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
-    dq << 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1;
-    control_time = 0.001;
-
+Eigen::VectorXd DemoReactivePlanner::compute_torques(Eigen::Matrix<double, 19, 1> &q, Eigen::Matrix<double, 18, 1> &dq,
+                                                     double control_time) {
     // update pinocchio
-    pinocchio::forwardKinematics(model, data, q); // TODO: check if this is redundant
-    pinocchio::computeJointJacobians(model, data, q);
     pinocchio::framesForwardKinematics(model, data, q);
     pinocchio::computeCentroidalMomentum(model, data, q, dq);
-    pinocchio::centerOfMass(model, data, q);
-    pinocchio::updateFramePlacements(model, data); // TODO: check if this is redundant
-
 
     // get x_com and xd_com
     Eigen::Matrix<double, 3, 1, 0> x_com = data.com[0];
     Eigen::MatrixXd xd_com = data.vcom[0];
 
     // make solo go forward
-//    com_des(0) = q(0) + v_des(0) * 0.001;
-    double x_com_des = q(0) + v_des(0) * 0.001;
-    Eigen::Vector3d com_des = {x_com_des, 0.0, com_height};
-    yaw_des = 0.0;
+//    double x_com_des = q(0) + v_des(0) * 0.001;
+//    Eigen::Vector3d com_des = {x_com_des, 0.0, com_height};
+//    yaw_des = 0.0;
     // make solo turn
-//     yaw_des = yaw(q);
-    // yaw_des = yaw_des + (y_des * 0.001);
+    v_des(0) = 0.0;
+    y_des = 0.2;
+    // yaw_des = yaw_des + y_des * 0.001;
+    yaw_des = yaw(q);
+    yaw_des = yaw_des + (y_des * 0.001);
+//    std::cout << "yaw_des (degrees) = " << (yaw_des * 180 / M_PI) << std::endl;
+    Eigen::Vector3d com_des = {0.0, 0.0, com_height};
+    com_des = {q[0], q[1], com_height};
 
     // get feet position
-    Eigen::Vector3d front_left_foot_position = data.oMf[imp_ctrls[0].get_endframe_index()].translation();
-    Eigen::Vector3d front_right_foot_position = data.oMf[imp_ctrls[1].get_endframe_index()].translation();
-    Eigen::Vector3d hind_left_foot_position = data.oMf[imp_ctrls[2].get_endframe_index()].translation();
-    Eigen::Vector3d hind_right_foot_position = data.oMf[imp_ctrls[3].get_endframe_index()].translation();
+    front_left_foot_position = data.oMf[imp_ctrls[0].get_endframe_index()].translation();
+    front_right_foot_position = data.oMf[imp_ctrls[1].get_endframe_index()].translation();
+    hind_left_foot_position = data.oMf[imp_ctrls[2].get_endframe_index()].translation();
+    hind_right_foot_position = data.oMf[imp_ctrls[3].get_endframe_index()].translation();
 
     // get feet velocity
     Eigen::Vector3d front_left_foot_velocity = pinocchio::getFrameVelocity(model, data,
@@ -167,9 +159,6 @@ Eigen::VectorXd DemoReactivePlanner::compute_torques(Eigen::VectorXd &q, Eigen::
     Eigen::Vector3d hind_right_foot_velocity = pinocchio::getFrameVelocity(model, data,
                                                                            imp_ctrls[3].get_endframe_index(),
                                                                            pinocchio::LOCAL_WORLD_ALIGNED).linear();
-//    std::cout << "com_position = " << x_com << std::endl;
-//    std::cout << "com_velocity = " << xd_com << std::endl;
-//    std::cout << "base_yaw = " << yaw(q) << std::endl;
     // compute x_des local
     quadruped_dcm_reactive_stepper.run(
             control_time,
@@ -187,60 +176,39 @@ Eigen::VectorXd DemoReactivePlanner::compute_torques(Eigen::VectorXd &q, Eigen::
             !open_loop
     );
 
-//    std::cout << "####################################" << std::endl;
-//    std::cout << "control_time = " << control_time << std::endl;
-//    std::cout << "front_left_foot_position = " << front_left_foot_position << std::endl;
-//    std::cout << "x_com = " << x_com << std::endl;
-//    std::cout << "xd_com = " << xd_com << std::endl;
-//    std::cout << "yaw(q) = " << yaw(q) << std::endl;
-//    std::cout << "!open_loop = " << !open_loop << std::endl;
-//    std::cout << "####################################" << std::endl;
-
-    Eigen::VectorXd x_des_local = Eigen::VectorXd::Zero(12);
     x_des_local <<
-            quadruped_dcm_reactive_stepper.get_front_left_foot_position()(0),
-            quadruped_dcm_reactive_stepper.get_front_left_foot_position()(1),
-            quadruped_dcm_reactive_stepper.get_front_left_foot_position()(2),
-            quadruped_dcm_reactive_stepper.get_front_right_foot_position()(0),
-            quadruped_dcm_reactive_stepper.get_front_right_foot_position()(1),
-            quadruped_dcm_reactive_stepper.get_front_right_foot_position()(2),
-            quadruped_dcm_reactive_stepper.get_hind_left_foot_position()(0),
-            quadruped_dcm_reactive_stepper.get_hind_left_foot_position()(1),
-            quadruped_dcm_reactive_stepper.get_hind_left_foot_position()(2),
-            quadruped_dcm_reactive_stepper.get_hind_right_foot_position()(0),
-            quadruped_dcm_reactive_stepper.get_hind_right_foot_position()(1),
-            quadruped_dcm_reactive_stepper.get_hind_right_foot_position()(2);
+                quadruped_dcm_reactive_stepper.get_front_left_foot_position(),
+            quadruped_dcm_reactive_stepper.get_front_right_foot_position(),
+            quadruped_dcm_reactive_stepper.get_hind_left_foot_position(),
+            quadruped_dcm_reactive_stepper.get_hind_right_foot_position();
 
     Eigen::Vector4d contact_array = quadruped_dcm_reactive_stepper.get_contact_array(); // cnt_array
 
     for (int j = 0; j < 4; j++) {
-        mim_control::ImpedanceController imp = imp_ctrls[j];
-        Eigen::Vector3d foot_des_local = data.oMf[imp.get_rootframe_index()].translation();
+        foot_des_local = data.oMf[imp_ctrls[j].get_rootframe_index()].translation();
         x_des_local.segment(3 * j, 3) = x_des_local.segment(3 * j, 3) - foot_des_local;
     }
 
-//    std::cout << "1. x_des_local = " << x_des_local << std::endl;
+    double roll = 0.0;
+    double pitch = 0.0;
+    Eigen::Quaterniond x_ori;
+    x_ori = Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitX()) *
+            Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY()) *
+            Eigen::AngleAxisd(yaw_des, Eigen::Vector3d::UnitZ());
+    Eigen::Vector3d x_angvel = {0.0, 0.0, y_des / 2};
 
-    // compute w_com and F
-    // convert rpy to quaternion
-    Eigen::Matrix<float, 3, 3> rpy_des = pinocchio::rpy::rpyToMatrix<float>(0.0, 0.0, yaw_des);
-    Eigen::Quaternionf x_ori_quat;
-    x_ori_quat = rpy_des;
-    Eigen::Vector4d x_ori = {x_ori_quat.x(), x_ori_quat.y(), x_ori_quat.z(), x_ori_quat.w()};
-    Eigen::Vector3d x_angvel = {0.0, 0.0, y_des};
+    Eigen::Quaterniond curr_orientation = Eigen::Quaterniond(q(6), q(5), q(4), q(3));
+    curr_orientation.normalize();
+    Eigen::MatrixXd curr_rot = curr_orientation.toRotationMatrix();
 
-    std::cout << "kc = " << kc << std::endl;
-    std::cout << "dc = " << kc << std::endl;
-    std::cout << "kb = " << kc << std::endl;
-    std::cout << "db = " << kc << std::endl;
-    std::cout << "q.head(3) = " << q.head(3) << std::endl;
-    std::cout << "dq.head(3) = " << dq.head(3) << std::endl;
-    std::cout << "orientation = " << q.segment(3, 4) << std::endl;
-    std::cout << "angular velocity = " << dq.segment(3, 3) << std::endl;
-    std::cout << "com_des = " << com_des << std::endl;
-    std::cout << "vcom_des = " << v_des << std::endl;
-    std::cout << "orientation_des = " << x_ori << std::endl;
-    std::cout << "angular_velocity_des = " << x_angvel << std::endl;
+    auto extract_yaw = [](Eigen::Vector4d quat) {
+        double x = quat(0);
+        double y = quat(1);
+        double z = quat(2);
+        double w = quat(3);
+        return atan2(2.0f * (w * z + x * y), w * w + x * x - y * y - z * z);
+    };
+
     // compute w_com
     centrl_pd_ctrl.run(
             kc,
@@ -249,17 +217,28 @@ Eigen::VectorXd DemoReactivePlanner::compute_torques(Eigen::VectorXd &q, Eigen::
             db,
             q.head(3),
             com_des,
-            dq.head(3),
+            curr_rot * dq.head(3),
             v_des,
             q.segment(3, 4),
-            x_ori,
+            x_ori.coeffs(),
             dq.segment(3, 3),
             x_angvel
     );
-     Eigen::VectorXd w_com = Eigen::VectorXd::Zero(6);
-     w_com(2) = w_com(2) + 9.81 * 2.5;
-     w_com = w_com + centrl_pd_ctrl.get_wrench();
-//     std::cout << "2. w_com = " << w_com << std::endl;
+//    std::cout << "q.head(3) = " << q.head(3) << std::endl;
+//    std::cout << "dq.head(3) = " << dq.head(3) << std::endl;
+//    std::cout << "orientation = " << q.segment(3, 4) << std::endl;
+//    std::cout << "angular velocity = " << dq.segment(3, 3) << std::endl;
+//    std::cout << "com_des = " << com_des << std::endl;
+//    std::cout << "vcom_des = " << v_des << std::endl;
+//    std::cout << "orientation_des = " << x_ori.coeffs() << std::endl;
+//    std::cout << "angular_velocity_des = " << x_angvel << std::endl;
+//    std::cout << "orientation = " << x_ori.coeffs() << std::endl;
+//    std::cout << "current yaw = " << (yaw(q) * 180 / M_PI) << std::endl;
+//    std::cout << "yaw_des (degrees) = " << (yaw_des * 180 / M_PI) << std::endl;
+
+    Eigen::VectorXd w_com = Eigen::VectorXd::Zero(6);
+    w_com(2) = w_com(2) + 9.81 * 2.5;
+    w_com = w_com + centrl_pd_ctrl.get_wrench();
 
     // compute ee_forces
     Eigen::Vector3d com = pinocchio::centerOfMass(model, data, q);
@@ -276,44 +255,29 @@ Eigen::VectorXd DemoReactivePlanner::compute_torques(Eigen::VectorXd &q, Eigen::
 
     force_qp.run(w_com, rel_eff, contact_array);
     Eigen::VectorXd ee_forces = force_qp.get_forces();
-//    std::cout << "3. ee_forces = " << ee_forces << std::endl;
 
     // get des_vel
     Eigen::VectorXd des_vel = Eigen::VectorXd::Zero(12);
-    des_vel
-            << quadruped_dcm_reactive_stepper.get_front_left_foot_velocity(),
+    des_vel << quadruped_dcm_reactive_stepper.get_front_left_foot_velocity(),
             quadruped_dcm_reactive_stepper.get_front_right_foot_velocity(),
             quadruped_dcm_reactive_stepper.get_hind_left_foot_velocity(),
             quadruped_dcm_reactive_stepper.get_hind_right_foot_velocity();
 
-//    std::cout << "4. des_vel = " << des_vel << std::endl;
-
     // passing forces to the impedance controller
     Eigen::VectorXd tau = Eigen::VectorXd::Zero(12);
 
-//    q << 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
-//    dq << 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1;
-//    x_des_local << -0.000585, 0.04338, -0.174779, -0.00054, -0.045733, -0.17542, 0.0005263, 0.0443874, -0.174771, 0.0004180, -0.046741, -0.175435;
-//    des_vel << 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0;
-//    ee_forces << 0.53, 0.6, 11.74, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.42, 9.76, 12.78;
-
     for (int i = 0; i < 4; i++) {
-        Eigen::Vector3d desired_pos = x_des_local.segment(3 * i, 3);
-        pinocchio::Motion xd_des = pinocchio::Motion(des_vel.segment(3 * i, 3), Eigen::Vector3d({0, 0, 0}));
-        Eigen::VectorXd kp_array(6);
-        Eigen::VectorXd kd_array(6);
-
-//        kp_array << kp.segment(3*i, 3), 0, 0, 0;
-//        kd_array << kd.segment(3*i, 3), 0, 0, 0;
+        desired_pos = x_des_local.segment(3 * i, 3);
+        xd_des = pinocchio::Motion(des_vel.segment(3 * i, 3), Eigen::Vector3d({0, 0, 0}));
 
         if (contact_array(i) == 1) {
             kp_array = Eigen::VectorXd::Zero(6);
             kd_array = Eigen::VectorXd::Zero(6);
         } else {
-            kp_array << kp.segment(3*i, 3), 0, 0, 0;
-            kd_array << kd.segment(3*i, 3), 0, 0, 0;
+            kp_array << kp.segment(3 * i, 3), 0, 0, 0;
+            kd_array << kd.segment(3 * i, 3), 0, 0, 0;
         }
-        imp_ctrls[i].run(
+        imp_ctrls[i].run_local(
                 q,
                 dq,
                 kp_array.array(),
@@ -326,29 +290,10 @@ Eigen::VectorXd DemoReactivePlanner::compute_torques(Eigen::VectorXd &q, Eigen::
         tau = tau + imp_ctrls[i].get_joint_torques();
     }
 
-    if (control_time < 0.01) {
-//        std::cout << "#####################################" << std::endl;
-//        std::cout << "com_des = " << com_des << std::endl;
-//        std::cout << "orientation_desired = " << x_ori << std::endl;
-//        std::cout << "x_des_local = " << x_des_local << std::endl;
-//        std::cout << "w_com = " << w_com << std::endl;
-//        std::cout << "ee_forces = " << ee_forces << std::endl;
-//        std::cout << "des_vel = " << des_vel << std::endl;
-//        std::cout << "tau = " << tau << std::endl;
-//        std::cout << "#####################################" << std::endl;
-//        std::cout << "v_des = " << v_des << std::endl;
-//        std::cout << "y_des = " << y_des << std::endl;
-//        std::cout << "com_des = " << com_des << std::endl;
-//        std::cout << "yaw_des = " << yaw_des << std::endl;
-//        std::cout << "yaw(q) = " << yaw(q);
-    }
-//    std::cout << "5. tau = " << tau << std::endl;
-
     return tau;
 }
 
-// TODO: verify if this is correct
-double DemoReactivePlanner::yaw(Eigen::VectorXd &q) {
+double DemoReactivePlanner::yaw(Eigen::Matrix<double, 19, 1> &q) {
     Eigen::Vector4d quat = q.segment(3, 4);
     double x = quat(0);
     double y = quat(1);

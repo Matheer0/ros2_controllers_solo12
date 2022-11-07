@@ -30,6 +30,7 @@ from tf2_ros.transform_listener import TransformListener
 from tf2_ros.buffer import Buffer
 from ros2_control_test_nodes.robot_properties_solo.Solo12Config import Solo12Config
 
+plt.rcParams.update({'font.size': 22})
 
 class RobotControllers(Node):
 
@@ -179,7 +180,7 @@ class RobotControllers(Node):
             self.publisher_.publish(msg)
 
         if self.curr_state == self.States.WALK:
-            # start = self.get_clock().now().to_msg().nanosec
+            start = self.get_clock().now().to_msg().nanosec
             msg = Float64MultiArray()
             pose_fp, twist_fp = base_frame_rel_footprint()
             # joint_config_with_base = np.concatenate((pose_fp, self.joint_config))
@@ -188,13 +189,13 @@ class RobotControllers(Node):
             joint_vel_with_base = np.concatenate((self.robot_twist, self.joint_velocity))
             tau = self.reactive_planner_demo.compute_torques(joint_config_with_base, joint_vel_with_base,
                                                              self.control_time,
-                                                             "forward")  # last argument options: forward, turn,
+                                                             "turn")  # last argument options: forward, turn,
             desired_feet_pos = self.reactive_planner_demo.get_desired_next_step_pos(joint_config_with_base)
             # self.get_logger().info(f'desired next step feet pos = {desired_feet_pos}')
             msg.data = tau.tolist()
             self.publisher_.publish(msg)
-            # end = self.get_clock().now().to_msg().nanosec
-            # self.get_logger().info(f'total time = {end - start}')
+            end = self.get_clock().now().to_msg().nanosec
+            self.get_logger().info(f'total time = {end - start}')
             self.control_time += 0.001
 
         if self.curr_state == self.States.RESET_EFFORT:
@@ -207,24 +208,31 @@ class RobotControllers(Node):
             # compute error
             err = np.sum(np.absolute(x_curr_local[:, 1][100:200] - x_des_local[:, 1][100:200])) + np.sum(np.absolute(x_curr_local[:, 1][300:400] - x_des_local[:, 1][300:400]))
             self.get_logger().info(f'err = {err}')
-            # print(f'error = {err}')
-            # plot for 1 foot only
             time_step = np.arange(0, x_curr_local.shape[0] * 0.001, 0.001)
-            fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(5, 2.7))
+            # fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(5, 2.7))
+            fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(5, 2.7))
             ax1.plot(time_step, x_curr_local[:, 0], label="Current X")
             ax1.plot(time_step, x_des_local[:, 0], label="Desired X")
             ax1.plot(time_step, feet_pos_des[:, 0], label="Next step X")
+            ax1.set_xlabel('Time [s]')
+            ax1.set_ylabel('Foot Position [m]')
             ax2.plot(time_step, x_curr_local[:, 1], label="Current Y")
             ax2.plot(time_step, x_des_local[:, 1], label="Desired Y")
             ax2.plot(time_step, feet_pos_des[:, 1], label="Next step Y")
+            ax2.set_xlabel('Time [s]')
+            ax2.set_ylabel('Foot Position [m]')
             ax3.plot(time_step, x_curr_local[:, 2], label="Current Z")
             ax3.plot(time_step, x_des_local[:, 2], label="Desired Z")
             ax3.plot(time_step, feet_pos_des[:, 2], label="Next step Z")
-            ax4.plot(time_step, com_pos[:, 1], label="Current Y COM")
+            ax3.set_xlabel('Time [s]')
+            ax3.set_ylabel('Foot Position [m]')
+            # ax4.plot(time_step, com_pos[:, 1], label="Current Y COM")
+            # ax4.set_xlabel('Time [s]')
+            # ax4.set_ylabel('Body Position [m]')
             ax1.legend()
             ax2.legend()
             ax3.legend()
-            ax4.legend()
+            # ax4.legend()
             plt.show()
 
     def update_joint_states(self, msg):

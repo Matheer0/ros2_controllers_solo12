@@ -68,7 +68,6 @@ namespace mim_control
         ori_error_quat_ = ori_error_se3_;
 
         ori_error_ = pinocchio::quaternion::log3(des_ori_quat_ * ori_quat_.conjugate());
-
         /*---------- computing ang error ----*/
 
         // Rotate the des and current angular velocity into the world frame.

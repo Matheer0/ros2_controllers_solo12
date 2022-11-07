@@ -5,6 +5,10 @@ if (CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif ()
 
+if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+endif()
+
 
 find_package(PkgConfig)        # find pkg_config
 
@@ -126,7 +130,7 @@ target_link_boost_python(reactive_planners_cpp PRIVATE)
 install(TARGETS
         reactive_planners_cpp
         DESTINATION
-        ${CMAKE_INSTALL_PREFIX}/../../src/ros2_controllers_solo/ros2_control_test_nodes/ros2_control_test_nodes/reactive_planners
+        ${CMAKE_INSTALL_PREFIX}/../../src/ros2_controllers_solo12/ros2_control_test_nodes/ros2_control_test_nodes/reactive_planners
 )
 
 if (BUILD_TESTING)

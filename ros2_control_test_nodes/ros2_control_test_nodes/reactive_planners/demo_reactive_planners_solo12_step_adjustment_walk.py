@@ -19,25 +19,15 @@ class Demo:
         self.robot = Solo12Robot()
 
         # Initialize RobotImpedanceController
-        # self.kp = np.array(12 * [50.0])
-        # self.kd = 12 * [5.0]
-        self.kp = np.array(12 * [300.0])
-        self.kd = 12 * [10.0]
+        self.kp = np.array(12 * [100.0])
+        self.kd = 12 * [5.0]
+        # self.kp = np.array(12 * [300.0])
+        # self.kd = 12 * [10.0]
         robot_config = Solo12Config()
         config_file = robot_config.ctrl_path
         self.solo_leg_ctrl = RobotImpedanceController(self.robot, config_file)
 
         # Initialize RobotCentroidalController
-        # self.centr_controller = RobotCentroidalController(
-        #     robot_config,
-        #     mu=0.6,
-        #     kc=[0, 0, 200],
-        #     dc=[10, 10, 10],
-        #     kb=[25, 25, 25.],
-        #     db=[22.5, 22.5, 22.5],
-        #     qp_penalty_lin=[1e0, 1e0, 1e6],
-        #     qp_penalty_ang=[1e6, 1e6, 1e6],
-        # )
         self.centr_controller = RobotCentroidalController(
             robot_config,
             mu=0.6,
@@ -48,6 +38,16 @@ class Demo:
             qp_penalty_lin=[1e0, 1e0, 1e6],
             qp_penalty_ang=[1e6, 1e6, 1e6],
         )
+        # self.centr_controller = RobotCentroidalController(
+        #     robot_config,
+        #     mu=0.6,
+        #     kc=[0, 0, 200],
+        #     dc=[10, 10, 10],
+        #     kb=[25, 25, 25.],
+        #     db=[22.5, 22.5, 22.5],
+        #     qp_penalty_lin=[1e0, 1e0, 1e6],
+        #     qp_penalty_ang=[1e6, 1e6, 1e6],
+        # )
 
         # Quadruped_dcm_reactive_stepper parameters
         self.is_left_leg_in_contact = True
@@ -149,10 +149,6 @@ class Demo:
 
     def compute_torques(self, q, qdot, control_time, action=""):
 
-        # q = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-        # qdot = np.array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1])
-        # control_time = 0.001
-
         self.robot.pin_robot.com(q, qdot)
         self.robot.update_pinocchio(q, qdot)
         x_com = self.robot.pin_robot.com(q, qdot)[0]
@@ -174,6 +170,7 @@ class Demo:
             self.com_des += self.v_des[:2] * 0.001
             self.yaw_des = 0.0
         elif action == "turn":
+            self.v_des[0] = 0.0
             self.y_des = 0.1
             self.yaw_des = self.yaw(q)
             self.yaw_des += self.y_des * 0.001
@@ -198,9 +195,6 @@ class Demo:
         hind_right_foot_velocity = pin.getFrameVelocity(
             self.robot.pin_robot.model, self.robot.pin_robot.data, HR.frame_end_idx, pin.LOCAL_WORLD_ALIGNED).linear
 
-        # print(f'com_position = {x_com}')
-        # print(f'com_velocity = {xd_com}')
-        # print(f'base_yaw = {self.yaw(q)}')
         self.quadruped_dcm_reactive_stepper.run(
             control_time,
             front_left_foot_position,
@@ -217,23 +211,6 @@ class Demo:
             not self.open_loop,
         )
 
-        # print("###############################################")
-        # print(f'control_time = {control_time}')
-        # print(f'front_left_foot_position = {front_left_foot_position}')
-        # print(f'front_right_foot_position = {front_right_foot_position}')
-        # print(f'hind_left_foot_position = {hind_left_foot_position}')
-        # print(f'hind_right_foot_position = {hind_right_foot_position}')
-        # print(f'front_left_foot_velocity = {front_left_foot_velocity}')
-        # print(f'front_right_foot_velocity = {front_right_foot_velocity}')
-        # print(f'hind_left_foot_velocity = {hind_left_foot_velocity}')
-        # print(f'hind_right_foot_velocity = {hind_right_foot_velocity}')
-        # print(f'x_com = {x_com}')
-        # print(f'xd_com = {xd_com}')
-        # print(f'self.yaw(q) = {self.yaw(q)}')
-        # print(f'not self.open_loop = {not self.open_loop}')
-        # print("###############################################")
-
-
         x_des_local = []
         x_des_local.extend(self.quadruped_dcm_reactive_stepper.get_front_left_foot_position())
         x_des_local.extend(self.quadruped_dcm_reactive_stepper.get_front_right_foot_position())
@@ -241,7 +218,6 @@ class Demo:
         x_des_local.extend(self.quadruped_dcm_reactive_stepper.get_hind_right_foot_position())
 
         # for tracking the feet position
-        # if control_time > 3:
         if self.x_curr_local is None:
             self.x_curr_local = np.array([front_left_foot_position.copy()])
             self.x_des_local = np.array([self.quadruped_dcm_reactive_stepper.get_front_left_foot_position().copy()])
@@ -261,13 +237,6 @@ class Demo:
                 imp.frame_root_idx
             ].translation
 
-        # print(f'1. x_des_local = {x_des_local}')
-
-        # print(f'com_des = {[self.com_des[0], self.com_des[1], self.com_height]}')
-        # print(f'v_com_des = {self.v_des}')
-        # print(f'orientation_des = {pin.Quaternion(pin.rpy.rpyToMatrix(0., 0., self.yaw_des)).coeffs()}')
-        # print(f'angular_velocity_des = {[0.0, 0.0, self.y_des]}')
-
         w_com = self.centr_controller.compute_com_wrench(
             q.copy(),
             qdot.copy(),
@@ -276,10 +245,8 @@ class Demo:
             pin.Quaternion(pin.rpy.rpyToMatrix(0., 0., self.yaw_des)).coeffs(),
             [0.0, 0.0, self.y_des], # angular velocity desired
         )
-        # print(f'2. w_com = {w_com}')
 
         F = self.centr_controller.compute_force_qp(q, qdot, cnt_array, w_com)
-        # print(f'3. F = {F}')
 
         des_vel = np.concatenate(
             (
@@ -289,7 +256,6 @@ class Demo:
                 self.quadruped_dcm_reactive_stepper.get_hind_right_foot_velocity(),
             )
         )
-        # print(f'4. des_vel = {des_vel}')
 
         if cnt_array[0] == 1:
             F[3:6] = -self.dcm_force[:3]
@@ -297,13 +263,6 @@ class Demo:
         else:
             F[0:3] = -self.dcm_force[:3]
             F[9:12] = -self.dcm_force[:3]
-
-
-        # q = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-        # qdot = np.array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1])
-        # x_des_local = np.array([-0.000585, 0.04338, -0.174779, -0.00054, -0.045733, -0.17542, 0.0005263, 0.0443874, -0.174771, 0.0004180, -0.046741, -0.175435])
-        # des_vel = np.array([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
-        # F = np.array([0.53, 0.6, 11.74, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.42, 9.76, 12.78])
 
         tau = self.solo_leg_ctrl.return_joint_torques(
             q.copy(),
@@ -314,24 +273,6 @@ class Demo:
             des_vel,
             F,
         )
-
-        # if control_time < 0.01:
-            # print("########################################")
-            # print(f'com_des = {[self.com_des[0], self.com_des[1], self.com_height]}')
-            # print(f'orientation_des = {pin.Quaternion(pin.rpy.rpyToMatrix(0., 0., self.yaw_des)).coeffs()}')
-            # print(f'x_des_local = {x_des_local}')
-            # print(f'w_com = {w_com}')
-            # print(f'F= {F}')
-            # print(f'des_vel = {des_vel}')
-            # print(f'tau = {tau}')
-            # print("########################################")
-            # print(f'v_des = {self.v_des}')
-            # print(f'y_des = {self.y_des}')
-            # print(f'com_des = {self.com_des}')
-            # print(f'yaw_des = {self.yaw_des}')
-            # print(f'yaw(q) = {self.yaw(q)}')
-
-        # print(f'5. tau = {tau}')
 
         return tau
 

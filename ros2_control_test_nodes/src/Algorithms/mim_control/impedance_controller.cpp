@@ -9,6 +9,7 @@
 
 #include "ros2_control_test_nodes/mim_control/impedance_controller.hpp"
 #include "pinocchio/algorithm/frames.hpp"
+// #include <pinocchio/algorithm/jacobian.hpp>
 
 namespace mim_control
 {
@@ -84,7 +85,7 @@ namespace mim_control
         pinocchio::computeJointJacobians(
                 pinocchio_model_, pinocchio_data_, robot_configuration);
         // Compute relative velocity between frames
-        compute_relative_velocity_between_frames(pinocchio_data_, robot_velocity);
+        compute_relative_velocity_between_frames(pinocchio_data_, robot_configuration, robot_velocity);
         run_precomputed_data(pinocchio_data_,
                              gain_proportional,
                              gain_derivative,
@@ -122,10 +123,6 @@ namespace mim_control
         err_se3_.head<3>() = root_orientation_.rotation() *
                              (desired_end_frame_placement.translation() -
                               actual_end_frame_placement_.translation());
-
-        err_se3_.head<3>() = (desired_end_frame_placement.translation() -
-                              actual_end_frame_placement_.translation());
-
         err_se3_.tail<3>() =
                 pinocchio::log3(desired_end_frame_placement.rotation().transpose() *
                                 actual_end_frame_placement_.rotation());
@@ -133,29 +130,13 @@ namespace mim_control
         // Actual end frame velocity in root frame.
         actual_end_frame_velocity_ =
                 end_placement_.actInv(end_velocity_ - root_velocity_);
-        actual_end_frame_velocity_ = end_velocity_ - root_velocity_;
-
-        // compute relative velocity between frames
-        // std::cout << "relative_vel_between_frames = " << relative_vel_between_frames << std::endl;
-        actual_end_frame_velocity_ = pinocchio::Motion(relative_vel_between_frames.segment(0, 3), Eigen::Vector3d({0, 0, 0}));
 
         // Velocity error.
         err_vel_ = end_orientation_.act(desired_end_frame_velocity -
                                         actual_end_frame_velocity_);
 
-        err_vel_ = (desired_end_frame_velocity - actual_end_frame_velocity_);
-
         // Compute the force to be applied to the environment.
         impedance_force_ = gain_proportional * err_se3_.array();
-//        std::cout << "gain proportional = " << gain_proportional << std::endl;
-//        std::cout << "gain derivative = " << gain_derivative << std::endl;
-//        std::cout << "desired end frame placement = " << desired_end_frame_placement.translation() << std::endl;
-//        std::cout << "actual end frame placement = " << actual_end_frame_placement_.translation() << std::endl;
-//        std::cout << "desired end frame velocity = " << desired_end_frame_velocity << std::endl;
-//        std::cout << "actual end frame velocity = " << actual_end_frame_velocity_ << std::endl;
-//        std::cout << "err_se3 = " << err_se3_.head<3>() << std::endl;
-//        std::cout << "err_vel_.array() = " << err_vel_.toVector().array() << std::endl;
-//        std::cout << "impedance_force_ = " << impedance_force_ << std::endl;
         impedance_force_ +=
                 (gain_derivative * err_vel_.toVector().array()).matrix();
         impedance_force_ -=
@@ -183,6 +164,85 @@ namespace mim_control
         return;
     }
 
+    void ImpedanceController::run_local(Eigen::Ref<const Eigen::VectorXd> robot_configuration,
+                                        Eigen::Ref<const Eigen::VectorXd> robot_velocity,
+                                        Eigen::Ref<const Array6d> gain_proportional,
+                                        Eigen::Ref<const Array6d> gain_derivative,
+                                        const double& gain_feed_forward_force,
+                                        const pinocchio::SE3& desired_end_frame_placement,
+                                        const pinocchio::Motion& desired_end_frame_velocity,
+                                        const pinocchio::Force& feed_forward_force)
+    {
+        assert(robot_configuration.size() == pinocchio_model_.nq &&
+               "robot_configuration is not of the good size.");
+        assert(robot_velocity.size() == pinocchio_model_.nv &&
+               "robot_velocity is not of the good size.");
+        // Get the current frame placements and velocity.
+        // Compute the jacobians
+        pinocchio::computeJointJacobians(
+                pinocchio_model_, pinocchio_data_, robot_configuration);
+        pinocchio::updateFramePlacement(
+                pinocchio_model_, pinocchio_data_, root_frame_index_);
+        pinocchio::updateFramePlacement(
+                pinocchio_model_, pinocchio_data_, end_frame_index_);
+        // Compute relative velocity between frames
+        compute_relative_velocity_between_frames(pinocchio_data_, robot_configuration, robot_velocity);
+        root_placement_ = pinocchio_data_.oMf[root_frame_index_];
+        end_placement_ = pinocchio_data_.oMf[end_frame_index_];
+
+        // Orientations
+        root_orientation_.rotation() = root_placement_.rotation();
+        end_orientation_.rotation() = end_placement_.rotation();
+
+        // Actual end frame placement in root frame.
+        actual_end_frame_placement_ = pinocchio::SE3 (Eigen::Matrix3d::Identity(), end_placement_.translation() - root_placement_.translation());
+
+        // Placement error.
+        err_se3_.head<3>() = root_orientation_.rotation() *
+                             (desired_end_frame_placement.translation() -
+                              actual_end_frame_placement_.translation());
+
+        err_se3_.head<3>() = (desired_end_frame_placement.translation() -
+                              actual_end_frame_placement_.translation());
+
+        err_se3_.tail<3>() =
+                pinocchio::log3(desired_end_frame_placement.rotation().transpose() *
+                                actual_end_frame_placement_.rotation());
+
+        // Actual end frame velocity in root frame.
+        actual_end_frame_velocity_ = pinocchio::Motion(relative_vel_between_frames.segment(0, 3), Eigen::Vector3d({0, 0, 0}));
+
+        // Velocity error
+        err_vel_ = (desired_end_frame_velocity - actual_end_frame_velocity_);
+
+        // Compute the force to be applied to the environment.
+        impedance_force_ = gain_proportional * err_se3_.array();
+        impedance_force_ +=
+                (gain_derivative * err_vel_.toVector().array()).matrix();
+        impedance_force_ -=
+                (gain_feed_forward_force * feed_forward_force.toVector().array())
+                        .matrix();
+
+        // Get the jacobian.
+        pinocchio::getFrameJacobian(pinocchio_model_,
+                                    pinocchio_data_,
+                                    end_frame_index_,
+                                    pinocchio::LOCAL_WORLD_ALIGNED,
+                                    end_jacobian_);
+
+        impedance_jacobian_ = end_jacobian_;
+
+        // compute the output torques
+        torques_ = (impedance_jacobian_.transpose() * impedance_force_);
+
+        if (pinocchio_model_has_free_flyer_)
+            joint_torques_ = torques_.tail(pinocchio_model_.nv - 6);
+        else
+        {
+            joint_torques_ = torques_;
+        }
+    }
+
     const Eigen::VectorXd& ImpedanceController::get_torques()
     {
         return torques_;
@@ -208,7 +268,7 @@ namespace mim_control
         return root_frame_index_;
     }
 
-    void ImpedanceController::compute_relative_velocity_between_frames(pinocchio::Data& pinocchio_data, Eigen::Ref<const Eigen::VectorXd> &robot_velocity) {
+    void ImpedanceController::compute_relative_velocity_between_frames(pinocchio::Data& pinocchio_data, Eigen::Ref<const Eigen::VectorXd> &robot_configration, Eigen::Ref<const Eigen::VectorXd> &robot_velocity) {
         Eigen::Matrix3d root_frame_rotation = pinocchio_data_.oMf[root_frame_index_].rotation();
         Eigen::Matrix3d end_frame_rotation = pinocchio_data_.oMf[end_frame_index_].rotation();
         pinocchio::SE3 frame_config_root = pinocchio::SE3(root_frame_rotation, Eigen::Vector3d::Zero());
@@ -216,17 +276,6 @@ namespace mim_control
         // root frame jocobian
         root_jacobian_.resize(6, pinocchio_model_.nv);
         root_jacobian_.fill(0.);
-        pinocchio::getFrameJacobian(pinocchio_model_,
-                                    pinocchio_data,
-                                    root_frame_index_,
-                                    pinocchio::LOCAL_WORLD_ALIGNED,
-                                    root_jacobian_);
-        // end frame jocobian
-        pinocchio::getFrameJacobian(pinocchio_model_,
-                                    pinocchio_data,
-                                    end_frame_index_,
-                                    pinocchio::LOCAL_WORLD_ALIGNED,
-                                    end_jacobian_);
         Eigen::VectorXd vel_root_in_world_frame = frame_config_root.toActionMatrix() * root_jacobian_ * robot_velocity;
         Eigen::VectorXd vel_end_in_world_frame = frame_config_end.toActionMatrix() * end_jacobian_ * robot_velocity;
         relative_vel_between_frames = vel_end_in_world_frame - vel_root_in_world_frame;

@@ -52,6 +52,13 @@ private:
     // TO-DO: move the field to the PD_control class
     Eigen::Matrix<double, 12, 1> desired_config;
 
+    // base + joint config
+    Eigen::Matrix<double, 19, 1> robot_config = Eigen::Matrix<double, 19, 1>::Zero(19);
+    // base + joint velocity
+    Eigen::Matrix<double, 18, 1> robot_vel = Eigen::Matrix<double, 18, 1>::Zero(18);
+    // tau
+    Eigen::Matrix<double, 12, 1> tau;
+
     // PD control
     PD_control pdControl;
 

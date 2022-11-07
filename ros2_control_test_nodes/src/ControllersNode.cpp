@@ -1,12 +1,15 @@
 #include <filesystem>
 #include <iostream>
 #include <chrono>
+#include <Eigen/Core>
 #include "ros2_control_test_nodes/ControllersNode.hpp"
 
 using std::placeholders::_1;
 using namespace std::chrono_literals;
 
 ControllersNode::States state = ControllersNode::NO_EFFORT;
+
+class math;
 
 // service callbacks
 void PD_callback(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
@@ -20,13 +23,6 @@ void centroidal_callback(const std::shared_ptr<std_srvs::srv::Trigger::Request> 
     state = ControllersNode::CENTROIDAL;
     response->success = true;
 };
-
-//void trigger_reactive_planner_callback(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
-//                                       std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
-//
-//    state = ControllersNode::WALK;
-//    response->success = true;
-//}
 
 ControllersNode::ControllersNode() : Node("test_controllers_cpp") {
 
@@ -78,9 +74,6 @@ ControllersNode::ControllersNode() : Node("test_controllers_cpp") {
 
     // Reactive planner
     demoReactivePlanner = DemoReactivePlanner(robot_description);
-//    Eigen::VectorXd temp_q(19);
-//    temp_q << 0.0, 0.0, 0.25, 0.0, 0.0, 0.0, 1.0, 0.0, 0.8, -1.6, 0.0, 0.8, -1.6, 0.0, -0.8, 1.6, 0.0, -0.8, 1.6;
-//    demoReactivePlanner.initialize(temp_q);
 
     // service to start the PD control
     srv_PD = this->create_service<std_srvs::srv::Trigger>("trigger_PD", &PD_callback);
@@ -92,9 +85,8 @@ ControllersNode::ControllersNode() : Node("test_controllers_cpp") {
             (const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
              std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
         control_time = 0.0;
-        Eigen::VectorXd joint_config_with_base(robot_pose.size() + joint_config.size());
-        joint_config_with_base << robot_pose, joint_config;
-        demoReactivePlanner.initialize(joint_config_with_base);
+        robot_config << robot_pose, joint_config;
+        demoReactivePlanner.initialize(robot_config);
         demoReactivePlanner.quadruped_dcm_reactive_stepper_start();
         state = ControllersNode::WALK;
         response->success = true;
@@ -128,14 +120,11 @@ void ControllersNode::timer_callback() {
         msg.data = tau_vector;
         publisher_->publish(msg);
     } else if (state == 3) { // state = WALK
-        Eigen::VectorXd joint_config_with_base(robot_pose.size() + joint_config.size());
-        joint_config_with_base << robot_pose, joint_config;
-        Eigen::VectorXd joint_vel_with_base(robot_twist.size() + joint_velocity.size());
-        joint_vel_with_base << robot_twist, joint_velocity;
-        Eigen::VectorXd tau = demoReactivePlanner.compute_torques(joint_config_with_base, joint_vel_with_base,
+        robot_config << robot_pose, joint_config;
+        robot_vel << robot_twist, joint_velocity;
+        tau = demoReactivePlanner.compute_torques(robot_config, robot_vel,
                                                                   control_time);
         control_time += 0.001;
-        // RCLCPP_INFO(this->get_logger(), "control time = %f", control_time);
         auto msg = std_msgs::msg::Float64MultiArray();
         std::vector<double> tau_vector(tau.data(), tau.data() + tau.rows() * tau.cols());
         msg.data = tau_vector;
@@ -168,10 +157,6 @@ void ControllersNode::update_body_state(const gazebo_msgs::msg::LinkStates::Shar
     robot_pose(0) = msg->pose[1].position.x;
     robot_pose(1) = msg->pose[1].position.y;
     robot_pose(2) = msg->pose[1].position.z;
-    robot_pose(3) = msg->pose[1].orientation.x;
-    robot_pose(4) = msg->pose[1].orientation.y;
-    robot_pose(5) = msg->pose[1].orientation.z;
-    robot_pose(6) = msg->pose[1].orientation.w;
     // body twist
     robot_twist(0) = msg->twist[1].linear.x;
     robot_twist(1) = msg->twist[1].linear.y;
@@ -179,4 +164,14 @@ void ControllersNode::update_body_state(const gazebo_msgs::msg::LinkStates::Shar
     robot_twist(3) = msg->twist[1].angular.x;
     robot_twist(4) = msg->twist[1].angular.y;
     robot_twist(5) = msg->twist[1].angular.z;
+    // normalize the quaternion
+    Eigen::Quaterniond quat(msg->pose[1].orientation.w,
+                         msg->pose[1].orientation.x,
+                         msg->pose[1].orientation.y,
+                         msg->pose[1].orientation.z);
+    quat.normalize();
+    robot_pose(3) = quat.coeffs()[0];
+    robot_pose(4) = quat.coeffs()[1];
+    robot_pose(5) = quat.coeffs()[2];
+    robot_pose(6) = quat.coeffs()[3];
 }

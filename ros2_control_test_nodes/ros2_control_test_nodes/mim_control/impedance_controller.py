@@ -46,9 +46,6 @@ class ImpedanceController(object):
         self.start_column = start_column
         self.active_joints = active_joints
 
-        # TODO: remove
-        self.dummy = 0
-
     def compute_forward_kinematics(self, q):
         """
         Computes forward kinematics of all the frames and stores in data
@@ -156,16 +153,6 @@ class ImpedanceController(object):
         ]
         jac = jac[:, self.active_joints]
 
-        # Store force for learning project.
-        # print(f'kp = {kp}')
-        # print(f'kd = {kd}')
-        # print(f'desired end frame placement = {x_des}')
-        # print(f'actual end frame placement = {x}')
-        # print(f'desired end frame velocity = {xd_des}')
-        # print(f'actual end frame velocity = {xd}')
-        # print(f'err_se3 = {x - x_des}')
-        # print(f'err_vel = {xd - xd_des}')
-        # print(f'impedance force = {np.matmul(kp, (x - x_des))}')
         self.F_ = (
             f + np.matmul(kp, (x - x_des)) + np.matmul(kd, (xd - xd_des).T).T
         )
@@ -178,17 +165,7 @@ class ImpedanceController(object):
             else:
                 final_tau.append(tau[j])
                 j += 1
-        # if self.dummy < 4:
-        #     print("---------------------")
-        #     print(f'x = {x}')
-        #     print(f'x - x_des = {x - x_des}')
-        #     print(f'kp = {kp}')
-        #     print(f'kd = {kd}')
-        #     print(f'x_des = {x_des}')
-        #     print(f'xd_des = {xd_des}')
-        #     print(f'f = {f}')
-        #     print(f'final_tau = {final_tau}')
-        #     self.dummy += 1
+
         return final_tau
 
     def compute_impedance_torques_world(self, q, dq, kp, kd, x_des, xd_des, f):

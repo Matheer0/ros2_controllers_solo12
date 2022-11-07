@@ -145,7 +145,40 @@ namespace mim_control
 
         const pinocchio::FrameIndex& get_rootframe_index();
 
-        void compute_relative_velocity_between_frames(pinocchio::Data& pinocchio_data, Eigen::Ref<const Eigen::VectorXd> &robot_velocity);
+        /**
+         * @biref Similar to run(), but in the root joint frame
+         *
+         * @param robot_configuration robot generalized coordinates configuration.
+         * @param robot_velocity robot generalized coordinates velocity.
+         * @param gain_proportional 6d vector for the proportional gains on {x, y,
+         * z, roll, pitch, yaw}.
+         * @param gain_derivative 6d vector for the proportional gains on {x, y, z,
+         * roll, pitch, yaw}.
+         * @param gain_feed_forward_force gain multiplying the feed forward force.
+         * @param desired_end_frame_placement desired end frame placement relative
+         * to the desired root joint.
+         * @param desired_end_frame_velocity desired end frame velocity relative to
+         * the desired root joint.
+         * @param feed_forward_force feed forward force applied to the foot by the
+         * environment.
+         */
+         void run_local(Eigen::Ref<const Eigen::VectorXd> robot_configuration,
+                        Eigen::Ref<const Eigen::VectorXd> robot_velocity,
+                        Eigen::Ref<const Array6d> gain_proportional,
+                        Eigen::Ref<const Array6d> gain_derivative,
+                        const double& gain_feed_forward_force,
+                        const pinocchio::SE3& desired_end_frame_placement,
+                        const pinocchio::Motion& desired_end_frame_velocity,
+                        const pinocchio::Force& feed_forward_force);
+
+        /**
+         * @brief computes the velocity of the end_frame with respect to a frame
+            whose origin aligns with the root frame but is oriented as the world frame
+         *
+         */
+        void compute_relative_velocity_between_frames(pinocchio::Data& pinocchio_data,
+                                                      Eigen::Ref<const Eigen::VectorXd> &robot_configration,
+                                                      Eigen::Ref<const Eigen::VectorXd> &robot_velocity);
 
     private:  // attributes
         /** @brief Rigid body dynamics model. */

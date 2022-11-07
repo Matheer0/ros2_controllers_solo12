@@ -13,13 +13,16 @@
 class DemoReactivePlanner {
 public:
     DemoReactivePlanner();
+
     DemoReactivePlanner(std::string path_to_urdf);
 
-    void initialize(Eigen::VectorXd &q);
+    void initialize(Eigen::Matrix<double, 19, 1> &q);
 
-    Eigen::VectorXd compute_torques(Eigen::VectorXd &q, Eigen::VectorXd &dq, float control_time);
+    Eigen::VectorXd
+    compute_torques(Eigen::Matrix<double, 19, 1> &q, Eigen::Matrix<double, 18, 1> &dq, double control_time);
 
     void quadruped_dcm_reactive_stepper_start();
+
 private:
 
     // pinocchio
@@ -33,7 +36,7 @@ private:
     std::vector<mim_control::ImpedanceController> imp_ctrls;
 
     // centroidal controller
-    float mu;
+    double mu;
     Eigen::Vector3d kc;
     Eigen::Vector3d dc;
     Eigen::Vector3d kb;
@@ -45,29 +48,42 @@ private:
 
     // Quadruped DCM reactive stepper
     bool is_left_leg_in_contact;
-    float l_min;
-    float l_max;
-    float w_min;
-    float w_max;
-    float t_min;
-    float t_max;
-    float l_p;
+    double l_min;
+    double l_max;
+    double w_min;
+    double w_max;
+    double t_min;
+    double t_max;
+    double l_p;
     double com_height;
     Eigen::VectorXd weight;
-    float mid_air_foot_height;
-    float control_period;
-    float planner_loop;
+    double mid_air_foot_height;
+    double control_period;
+    double planner_loop;
     reactive_planners::QuadrupedDcmReactiveStepper quadruped_dcm_reactive_stepper;
 
     // more fields
     Eigen::Vector3d v_des;
-    float y_des; // speed of yaw angle
-    // Eigen::Vector3d x_com; // TODO: I used a vector here but they used a matrix instead
+    double y_des; // speed of yaw angle
     double yaw_des;
     Eigen::Vector2d cnt_array;
     bool open_loop;
     Eigen::Vector3d dcm_force;
 
+    // vectors used in the compute_torques() method
+    Eigen::Vector3d front_left_foot_position = Eigen::Vector3d::Zero();
+    Eigen::Vector3d front_right_foot_position = Eigen::Vector3d::Zero();
+    Eigen::Vector3d hind_left_foot_position = Eigen::Vector3d::Zero();
+    Eigen::Vector3d hind_right_foot_position = Eigen::Vector3d::Zero();
+    Eigen::Matrix<double, 12, 1> x_des_local = Eigen::Matrix<double, 12, 1>::Zero(12);
+    mim_control::ImpedanceController imp;
+    Eigen::Vector3d foot_des_local = Eigen::Vector3d::Zero();
+
+    Eigen::Vector3d desired_pos;
+    pinocchio::Motion xd_des;
+    Eigen::Matrix<double, 6, 1> kp_array;
+    Eigen::Matrix<double, 6, 1> kd_array;
+
     // helper methods
-    static double yaw(Eigen::VectorXd &q);
+    static double yaw(Eigen::Matrix<double, 19, 1> &q);
 };
