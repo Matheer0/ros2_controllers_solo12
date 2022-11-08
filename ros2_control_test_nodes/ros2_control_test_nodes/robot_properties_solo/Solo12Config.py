@@ -11,8 +11,12 @@ class Solo12Config:
 
     def __init__(self):
 
+
+        # newly added
+        self.base_link_name = "base_link"
+
         urdf_path = os.path.join(Path(__file__).resolve().parents[4].absolute(), "ros2_control_solo",  "ros2_description_solo", "urdf",
-                                 "solo12.urdf")
+                                 "solo12_simulation.urdf")
         meshes_path = os.path.join(Path(__file__).resolve().parents[4].absolute(), "ros2_control_solo", "ros2_description_solo")
         print(f'URDF_PATH = {urdf_path}')
         print(f'meshes_path = {meshes_path}')
@@ -25,9 +29,9 @@ class Solo12Config:
         Solo12Config.pin_robot.model.rotorInertia[6:] = motor_inertia
         Solo12Config.pin_robot.model.rotorGearRatio[6:] = motor_gear_ration
 
-        robot_model = Solo12Config.pin_robot.model
-        mass = np.sum([i.mass for i in robot_model.inertias])
-        base_name = robot_model.frames[2].name
+        self.robot_model = Solo12Config.pin_robot.model
+        mass = np.sum([i.mass for i in self.robot_model.inertias])
+        base_name = self.robot_model.frames[2].name
 
         # End effectors informations
         shoulder_ids = []
@@ -35,9 +39,9 @@ class Solo12Config:
         shoulder_names = []
         end_effector_names = []
         for leg in ["FL", "FR", "HL", "HR"]:
-            shoulder_ids.append(robot_model.getFrameId(leg + "_HAA"))
+            shoulder_ids.append(self.robot_model.getFrameId(leg + "_HAA"))
             shoulder_names.append(leg + "_HAA")
-            end_eff_ids.append(robot_model.getFrameId(leg + "_FOOT"))
+            end_eff_ids.append(self.robot_model.getFrameId(leg + "_FOOT"))
             end_effector_names.append(leg + "_FOOT")
 
         self.should_ids = shoulder_ids
@@ -46,16 +50,16 @@ class Solo12Config:
         self.end_effector_names = end_effector_names
 
         nb_ee = len(end_effector_names)
-        hl_index = robot_model.getFrameId("HL_ANKLE")
-        hr_index = robot_model.getFrameId("HR_ANKLE")
-        fl_index = robot_model.getFrameId("FL_ANKLE")
-        fr_index = robot_model.getFrameId("FR_ANKLE")
+        hl_index = self.robot_model.getFrameId("HL_ANKLE")
+        hr_index = self.robot_model.getFrameId("HR_ANKLE")
+        fl_index = self.robot_model.getFrameId("FL_ANKLE")
+        fr_index = self.robot_model.getFrameId("FR_ANKLE")
 
         self.nb_ee = nb_ee
 
         # The number of motors, here they are the same as there are only revolute
         # joints.
-        nb_joints = robot_model.nv - 6
+        nb_joints = self.robot_model.nv - 6
         joint_names = [
             "FL_HAA",
             "FL_HFE",
@@ -78,9 +82,9 @@ class Solo12Config:
         map_joint_limits = {}
         for i, (name, lb, ub) in enumerate(
                 zip(
-                    robot_model.names[1:],
-                    robot_model.lowerPositionLimit,
-                    robot_model.upperPositionLimit,
+                    self.robot_model.names[1:],
+                    self.robot_model.lowerPositionLimit,
+                    self.robot_model.upperPositionLimit,
                 )
         ):
             map_joint_name_to_id[name] = i
@@ -96,19 +100,19 @@ class Solo12Config:
             0,
         ]
 
-        q0 = zero(robot_model.nq)
+        q0 = zero(self.robot_model.nq)
         q0[:] = self.initial_configuration
-        v0 = zero(robot_model.nv)
-        a0 = zero(robot_model.nv)
+        v0 = zero(self.robot_model.nv)
+        a0 = zero(self.robot_model.nv)
 
         base_p_com = [0.0, 0.0, -0.02]
 
-        rot_base_to_imu = np.identity(3)
-        r_base_to_imu = np.array([0.10407, -0.00635, 0.01540])
+        self.rot_base_to_imu = np.identity(3)
+        self.r_base_to_imu = np.array([0.10407, -0.00635, 0.01540])
 
         Solo12Config.pin_robot = self.pin_robot
 
-        self.mass = np.sum([i.mass for i in robot_model.inertias])
+        self.mass = np.sum([i.mass for i in self.robot_model.inertias])
 
         # TODO: refactor this
         dir_path = os.path.dirname(os.path.realpath(__file__))
