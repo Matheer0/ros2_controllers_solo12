@@ -11,9 +11,7 @@ class Solo12Config:
 
     def __init__(self):
 
-
-        # newly added
-        self.base_link_name = "base_link"
+        self.base_link_name = "base_link"  # newly added for state estimation
 
         urdf_path = os.path.join(Path(__file__).resolve().parents[4].absolute(), "ros2_control_solo",  "ros2_description_solo", "urdf",
                                  "solo12_simulation.urdf")
