@@ -14,7 +14,7 @@ class Solo12Config:
         self.base_link_name = "base_link"  # newly added for state estimation
 
         urdf_path = os.path.join(Path(__file__).resolve().parents[4].absolute(), "ros2_control_solo",  "ros2_description_solo", "urdf",
-                                 "solo12_simulation.urdf")
+                                 "solo12.urdf")
         meshes_path = os.path.join(Path(__file__).resolve().parents[4].absolute(), "ros2_control_solo", "ros2_description_solo")
         print(f'URDF_PATH = {urdf_path}')
         print(f'meshes_path = {meshes_path}')
