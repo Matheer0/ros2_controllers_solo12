@@ -3,6 +3,7 @@
 #include <chrono>
 #include <Eigen/Core>
 #include "ros2_control_test_nodes/ControllersNode.hpp"
+#include <chrono>
 
 using std::placeholders::_1;
 using namespace std::chrono_literals;
@@ -120,6 +121,7 @@ void ControllersNode::timer_callback() {
         msg.data = tau_vector;
         publisher_->publish(msg);
     } else if (state == 3) { // state = WALK
+        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
         robot_config << robot_pose, joint_config;
         robot_vel << robot_twist, joint_velocity;
         tau = demoReactivePlanner.compute_torques(robot_config, robot_vel,
@@ -129,6 +131,9 @@ void ControllersNode::timer_callback() {
         std::vector<double> tau_vector(tau.data(), tau.data() + tau.rows() * tau.cols());
         msg.data = tau_vector;
         publisher_->publish(msg);
+        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+        // RCLCPP_INFO(rclcpp::get_logger("rclcpp"), std::chrono::duration_cast<std::chrono::nanoseconds> (end - begin).count());
+        std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::nanoseconds> (end - begin).count() << "[ns]" << std::endl;
     }
 }
 

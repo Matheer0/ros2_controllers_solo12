@@ -46,7 +46,6 @@ DemoReactivePlanner::DemoReactivePlanner(std::string path_to_urdf) {
 
     quadruped_dcm_reactive_stepper = reactive_planners::QuadrupedDcmReactiveStepper();
 }
-
 void DemoReactivePlanner::initialize(Eigen::Matrix<double, 19, 1> &q) {
     // initialize fields for the quadruped Dcm reactive stepper
     is_left_leg_in_contact = true;
@@ -74,8 +73,8 @@ void DemoReactivePlanner::initialize(Eigen::Matrix<double, 19, 1> &q) {
 
     v_des = {0.0, 0.0, 0.0};
 //    v_des(0) = 0.2; // forward
-//    y_des = 0.0; // forward
-    y_des = 0.2; // turning
+    y_des = 0.0; // forward
+    // y_des = 0.2; // turning
 
     // centroidal initialization
     data.M.fill(0);
@@ -127,18 +126,18 @@ Eigen::VectorXd DemoReactivePlanner::compute_torques(Eigen::Matrix<double, 19, 1
     Eigen::MatrixXd xd_com = data.vcom[0];
 
     // make solo go forward
-//    double x_com_des = q(0) + v_des(0) * 0.001;
-//    Eigen::Vector3d com_des = {x_com_des, 0.0, com_height};
-//    yaw_des = 0.0;
+    double x_com_des = q(0) + v_des(0) * 0.001;
+    Eigen::Vector3d com_des = {x_com_des, 0.0, com_height};
+    yaw_des = 0.0;
     // make solo turn
-    v_des(0) = 0.0;
-    y_des = 0.2;
+    // v_des(0) = 0.0;
+    // y_des = 0.2;
     // yaw_des = yaw_des + y_des * 0.001;
-    yaw_des = yaw(q);
-    yaw_des = yaw_des + (y_des * 0.001);
+    //yaw_des = yaw(q);
+    // yaw_des = yaw_des + (y_des * 0.001);
 //    std::cout << "yaw_des (degrees) = " << (yaw_des * 180 / M_PI) << std::endl;
-    Eigen::Vector3d com_des = {0.0, 0.0, com_height};
-    com_des = {q[0], q[1], com_height};
+    // Eigen::Vector3d com_des = {0.0, 0.0, com_height};
+    // com_des = {q[0], q[1], com_height};
 
     // get feet position
     front_left_foot_position = data.oMf[imp_ctrls[0].get_endframe_index()].translation();
