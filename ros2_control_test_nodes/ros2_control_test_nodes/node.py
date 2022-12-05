@@ -180,23 +180,24 @@ class RobotControllers(Node):
             self.publisher_.publish(msg)
 
         if self.curr_state == self.States.WALK:
-            start = self.get_clock().now().to_msg().nanosec
+            # start = self.get_clock().now().to_msg().nanosec
             msg = Float64MultiArray()
-            pose_fp, twist_fp = base_frame_rel_footprint()
+            # pose_fp, twist_fp = base_frame_rel_footprint()
             # joint_config_with_base = np.concatenate((pose_fp, self.joint_config))
             # joint_vel_with_base = np.concatenate((twist_fp, self.joint_velocity))
             joint_config_with_base = np.concatenate((self.robot_pose, self.joint_config))
             joint_vel_with_base = np.concatenate((self.robot_twist, self.joint_velocity))
             tau = self.reactive_planner_demo.compute_torques(joint_config_with_base, joint_vel_with_base,
                                                              self.control_time,
-                                                             "turn")  # last argument options: forward, turn,
-            desired_feet_pos = self.reactive_planner_demo.get_desired_next_step_pos(joint_config_with_base)
+                                                             "forward")  # last argument options: forward, turn,
+            # desired_feet_pos = self.reactive_planner_demo.get_desired_next_step_pos(joint_config_with_base)
             # self.get_logger().info(f'desired next step feet pos = {desired_feet_pos}')
             msg.data = tau.tolist()
             self.publisher_.publish(msg)
-            end = self.get_clock().now().to_msg().nanosec
-            self.get_logger().info(f'total time = {end - start}')
-            self.control_time += 0.001
+            # end = self.get_clock().now().to_msg().nanosec
+            # print(f'duration = {end-start}')
+            # self.get_logger().info(f'total time = {end - start}')
+            self.control_time += 0.002
 
         if self.curr_state == self.States.RESET_EFFORT:
             msg = Float64MultiArray()
